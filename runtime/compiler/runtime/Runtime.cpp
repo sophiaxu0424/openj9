@@ -195,7 +195,6 @@ extern "C" void mcc_reservationAdjustment_unwrapper(void **argsPtr, void **resPt
 extern "C" void mcc_lookupHelperTrampoline_unwrapper(void **argsPtr, void **resPtr);
 #endif
 
-JIT_HELPER(j2iTransition);
 JIT_HELPER(icallVMprJavaSendNativeStatic);
 JIT_HELPER(icallVMprJavaSendStatic0);
 JIT_HELPER(icallVMprJavaSendStatic1);
@@ -427,6 +426,7 @@ JIT_HELPER(_interpreterUnresolvedInstanceDataGlue);
 JIT_HELPER(_interpreterUnresolvedInstanceDataStoreGlue);
 JIT_HELPER(_virtualUnresolvedHelper);
 JIT_HELPER(_interfaceCallHelper);
+JIT_HELPER(j2iTransition);
 JIT_HELPER(icallVMprJavaSendVirtual0);
 JIT_HELPER(icallVMprJavaSendVirtual1);
 JIT_HELPER(icallVMprJavaSendVirtualJ);
@@ -963,7 +963,6 @@ static void initS390WriteOnceHelpers(J9JITConfig *jitConfig,
 
 void initializeCodeRuntimeHelperTable(J9JITConfig *jitConfig, char isSMP)
    {
-   SET(TR_j2iTransition,                                    (void *)j2iTransition,                               TR_Helper);
    SET(TR_icallVMprJavaSendStatic0,                         (void *)icallVMprJavaSendStatic0,                    TR_Helper);
    SET(TR_icallVMprJavaSendStatic1,                         (void *)icallVMprJavaSendStatic1,                    TR_Helper);
    SET(TR_icallVMprJavaSendStaticJ,                         (void *)icallVMprJavaSendStaticJ,                    TR_Helper);

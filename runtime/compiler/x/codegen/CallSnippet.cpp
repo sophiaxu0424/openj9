@@ -834,6 +834,16 @@ TR_RuntimeHelper TR::X86CallSnippet::getInterpretedDispatchHelper(
    }
 
 
+TR_RuntimeHelper
+TR::X86CallSnippet::getDirectToInterpreterHelper(
+   TR::MethodSymbol   *methodSymbol,
+   TR::DataType        type,
+   bool                synchronised)
+   {
+   return methodSymbol->getVMCallHelper();
+   }
+
+
 uint8_t *TR::X86CallSnippet::emitSnippetBody()
    {
    TR_J9VMBase *fej9 = (TR_J9VMBase *)(cg()->fe());
