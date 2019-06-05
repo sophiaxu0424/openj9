@@ -117,6 +117,8 @@ int32_t TR::AMD64JNILinkage::computeMemoryArgSize(
    TR::Node *callNode,
    int32_t first,
    int32_t last,
+   int8_t direction,
+   bool isJNI,
    bool passThread)
    {
    int32_t size= 0;
@@ -131,7 +133,7 @@ int32_t TR::AMD64JNILinkage::computeMemoryArgSize(
    // that the evaluation order is left-to-right and that the JNI env
    // pointer will be in a register as the first argument.
    //
-   if (passThread)
+   if (isJNI && passThread)
       {
       TR_ASSERT(!_systemLinkage->getProperties().passArgsRightToLeft(), "JNI argument evaluation expected to be left-to-right");
       TR_ASSERT(_systemLinkage->getProperties().getNumIntegerArgumentRegisters() > 0, "JNI env pointer expected to be passed in a register.");
@@ -143,7 +145,7 @@ int32_t TR::AMD64JNILinkage::computeMemoryArgSize(
 
    bool allocateOnCallerFrame = false;
 
-   for (int32_t i = first; i != last; i++)
+   for (int32_t i = first; i != last; i += direction)
       {
       TR::Node *child = callNode->getChild(i);
       TR::DataType type = child->getDataType();
@@ -200,6 +202,7 @@ int32_t TR::AMD64JNILinkage::computeMemoryArgSize(
 int32_t TR::AMD64JNILinkage::buildArgs(
       TR::Node *callNode,
       TR::RegisterDependencyConditions *deps,
+      bool isJNI,
       bool passThread,
       bool passReceiver)
    {
@@ -213,27 +216,38 @@ int32_t TR::AMD64JNILinkage::buildArgs(
    int32_t                  offset            = 0;
    uint16_t                 numIntArgs        = 0,
                             numFloatArgs      = 0;
-   int32_t                  first, last;
+   int32_t                  first, last, direction;
 
    int32_t                  numCopiedRegs = 0;
    TR::Register             *copiedRegs[TR::X86LinkageProperties::MaxArgumentRegisters];
 
-   TR_ASSERT(!_systemLinkage->getProperties().passArgsRightToLeft(), "JNI dispatch expected to be left-to-right.");
-
-   if (!passReceiver)
-      first = firstNodeArgument + 1;
-   else first = firstNodeArgument;
-   last = lastNodeArgument + 1;
+   if (_systemLinkage->getProperties().passArgsRightToLeft())
+      {
+      TR_ASSERT(!isJNI, "JNI dispatch expected to be left-to-right.");
+      first = lastNodeArgument;
+      last  = firstNodeArgument - 1;
+      direction = -1;
+      }
+   else
+      {
+      if (!passReceiver)
+         first = firstNodeArgument + 1;
+      else first = firstNodeArgument;
+      last  = lastNodeArgument + 1;
+      direction = 1;
+      }
 
    // We need to know how many arguments will be passed on the stack in order to add the right
    // amount of slush first for proper alignment.
    //
-   int32_t memoryArgSize = computeMemoryArgSize(callNode, first, last, passThread);
+   int32_t memoryArgSize = computeMemoryArgSize(callNode, first, last, direction, isJNI, passThread);
 
    // For JNI callout there may be some extra information (such as the VMThread pointer)
    // that has been preserved on the stack that must be accounted for in this calculation.
    //
-   int32_t adjustedMemoryArgSize = memoryArgSize + _JNIDispatchInfo.argSize;
+   int32_t adjustedMemoryArgSize = memoryArgSize;
+   if (isJNI)
+      adjustedMemoryArgSize += _JNIDispatchInfo.argSize;
 
    if (adjustedMemoryArgSize > 0)
       {
@@ -249,7 +263,7 @@ int32_t TR::AMD64JNILinkage::buildArgs(
 
    // Evaluate the JNI env pointer first.
    //
-   if (passThread)
+   if (isJNI && passThread)
       {
       TR::RealRegister::RegNum rregIndex = _systemLinkage->getProperties().getIntegerArgumentRegister(0);
       TR::Register *argReg = cg()->allocateRegister();
@@ -280,7 +294,7 @@ int32_t TR::AMD64JNILinkage::buildArgs(
       }
 
    int32_t i;
-   for (i = first; i != last; i++)
+   for (i = first; i != last; i += direction)
       {
       TR::Node *child = callNode->getChild(i);
       TR::DataType type = child->getDataType();
@@ -314,7 +328,7 @@ int32_t TR::AMD64JNILinkage::buildArgs(
          }
 
       TR::Register *vreg;
-      if (type == TR::Address)
+      if (isJNI && type == TR::Address)
          vreg = processJNIReferenceArg(child);
       else
          vreg = cg()->evaluate(child);
@@ -773,7 +787,7 @@ void TR::AMD64JNILinkage::buildOutgoingJNIArgsAndDependencies(
 
    // Evaluate outgoing arguments on the system stack and build pre-conditions.
    //
-   _JNIDispatchInfo.argSize += buildArgs(callNode, _JNIDispatchInfo.callPostDeps, passThread, passReceiver);
+   _JNIDispatchInfo.argSize += buildArgs(callNode, _JNIDispatchInfo.callPostDeps, true, passThread, passReceiver);
 
    // Build post-conditions.
    //
@@ -1391,6 +1405,20 @@ TR::Register *TR::AMD64JNILinkage::buildDirectJNIDispatch(TR::Node *callNode)
    bool wrapRefs;
    bool passReceiver;
    bool passThread;
+
+   //TR::ResolvedMethodSymbol *resolvedMethodSymbol = callNode->getSymbol()->castToResolvedMethodSymbol();
+   //TR_ResolvedMethod       *resolvedMethod = resolvedMethodSymbol->getResolvedMethod();
+   //TR_J9VMBase *fej9 = (TR_J9VMBase *)(fe());
+
+   //bool dropVMAccess = !fej9->jniRetainVMAccess(resolvedMethod);
+   //bool isJNIGCPoint = !fej9->jniNoGCPoint(resolvedMethod);
+   //bool killNonVolatileGPRs = isJNIGCPoint;
+   //bool checkExceptions = !fej9->jniNoExceptionsThrown(resolvedMethod);
+   //bool createJNIFrame = !fej9->jniNoNativeMethodFrame(resolvedMethod);
+   //bool tearDownJNIFrame = !fej9->jniNoSpecialTeardown(resolvedMethod);
+   //bool wrapRefs = !fej9->jniDoNotWrapObjects(resolvedMethod);
+   //bool passReceiver = !fej9->jniDoNotPassReceiver(resolvedMethod);
+   //bool passThread = !fej9->jniDoNotPassThread(resolvedMethod);
 
    if (!isGPUHelper)
       {
